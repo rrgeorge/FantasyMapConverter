@@ -3,7 +3,7 @@ const readline = require("readline")
 const { v5: uuid5 } = require('uuid')
 const { toXML } = require('jstoxml')
 const AdmZip = require('adm-zip')
-const puppeteer = require('puppeteer')
+const puppeteer = require('puppeteer-core')
 const path = require('path')
 const md = require('markdown-it')()
     .use(require('markdown-it-multimd-table'))
@@ -251,6 +251,29 @@ module.exports = (mapfile,mapsvg,win=null) => {
     fs.readFile(mapfile,async (err,data)=>{
         if (err) { console.log(err); return }
         const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(),"fmg"))
+        if (!fs.existsSync(puppeteer.executablePath())) {
+            const browserFetcher = puppeteer.createBrowserFetcher({})
+            await browserFetcher.download("901912",(v,m)=>{
+                if (win?.webContents)
+                    win.webContents.executeJavaScript(`
+                        document.querySelector('#form').style.display = "none";
+                        document.querySelector('#progress').style.display = "block";
+                        document.querySelector('#progressBar').style.display = "unset";
+                        document.querySelector('#progressText').textContent = "Downloading Chromium";
+                        document.querySelector('#progressImage').style.display = "none";
+                        document.querySelector('#progressBar').value = ${v};
+                        document.querySelector('#progressBar').max = ${m};
+                        `)
+                else
+                    console.log(v,'/',m)
+            })
+            if (win?.webContents)
+                win.webContents.executeJavaScript(`
+                    document.querySelector('#progressText').textContent = "Preparing...";
+                    document.querySelector('#progressBar').removeAttribute('value');
+                    document.querySelector('#progressBar').removeAttribute('max');
+                    `)
+        }
         const browser = await puppeteer.launch({args: ['--disable-web-security']})
         const page = await browser.newPage()
         const mapPage = await browser.newPage()
@@ -328,6 +351,8 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 document.querySelector('#progressText').textContent = "Generating module for ${continent}";
                 document.querySelector('#progressDetail').textContent = "Converting map...";
                 document.querySelector('#progressImage').style.display = "none";
+                document.querySelector('#progressBar').removeAttribute('value');
+                document.querySelector('#progressBar').removeAttribute('max');
                 `)
         else
             console.log(`Generating module for ${continent}`)
