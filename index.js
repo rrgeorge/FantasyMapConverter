@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require('electron')
 const path = require('path')
 const fmgconvert = require('./fmgconvert')
+const puppeteer = require('puppeteer-core')
 let _win;
 app.on('ready',()=>{
     _win = new BrowserWindow({

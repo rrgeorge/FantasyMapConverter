@@ -1,4 +1,6 @@
 "use strict";
+const fs = require('fs')
+const path = require('path')
 
 module.exports = (function () {
   const window = new (require('jsdom').JSDOM)().window
@@ -1796,9 +1798,9 @@ module.exports = (function () {
     return fetchedCharges.join("");
   }
 
-  const url = "./charges/"
+  const url = (fs.existsSync(path.join(__dirname,"..","charges")))?path.join(__dirname,"..","charges"):"charges"
   async function fetchCharge(charge, id) {
-    let fetched = require('fs').readFileSync(url + charge + ".svg").toString()
+    let fetched = fs.readFileSync(path.join(url,`${charge}.svg`)).toString()
     const html = document.createElement("html");
     html.innerHTML = fetched;
     const g = html.querySelector("g");

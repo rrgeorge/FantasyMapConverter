@@ -17,7 +17,7 @@ const Voronoi = require('./voronoi')
 const d3 = require('d3')
 const Delaunator = require('delaunator')
 const querystring = require("querystring");
-const { BrowserWindow, dialog } = require('electron')
+const { app, BrowserWindow, dialog } = require('electron')
 const { 
  getBoundaryPoints,
  getJitteredGrid,
@@ -251,9 +251,12 @@ module.exports = (mapfile,mapsvg,win=null) => {
     fs.readFile(mapfile,async (err,data)=>{
         if (err) { console.log(err); return }
         const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(),"fmg"))
-        if (!fs.existsSync(puppeteer.executablePath())) {
-            const browserFetcher = puppeteer.createBrowserFetcher({})
-            await browserFetcher.download("901912",(v,m)=>{
+        const browserFetcher = puppeteer.createBrowserFetcher({ path: path.join(app.getPath("userData"),"chromium")})
+        const browserRevisions = await browserFetcher.localRevisions()
+        let browserPath = browserFetcher.revisionInfo(browserRevisions[0])?.executablePath
+        if (browserRevisions.length = 0||!fs.existsSync(browserFetcher.revisionInfo(browserRevisions[0]).executablePath)) {
+            browserFetcher.localRevisions().then(r=>console.log(r))
+            const browserRevision = await browserFetcher.download("901912",(v,m)=>{
                 if (win?.webContents)
                     win.webContents.executeJavaScript(`
                         document.querySelector('#form').style.display = "none";
@@ -267,6 +270,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 else
                     console.log(v,'/',m)
             })
+            browserPath = browserRevision.executablePath
             if (win?.webContents)
                 win.webContents.executeJavaScript(`
                     document.querySelector('#progressText').textContent = "Preparing...";
@@ -274,7 +278,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
                     document.querySelector('#progressBar').removeAttribute('max');
                     `)
         }
-        const browser = await puppeteer.launch({args: ['--disable-web-security']})
+        const browser = await puppeteer.launch({executablePath: browserPath,args: ['--disable-web-security']})
         const page = await browser.newPage()
         const mapPage = await browser.newPage()
         await page.setDefaultTimeout(0)
