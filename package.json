@@ -25,6 +25,9 @@
             "AppImage"
         ]
     },
+    "asarUnpack": [
+      "**/node_modules/puppeteer-core/**"
+    ],
     "afterSign": "scripts/notarize.js",
     "publish": [
       "github"
