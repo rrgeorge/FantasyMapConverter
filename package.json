@@ -1,7 +1,7 @@
 {
   "name": "fantasymapconverter",
   "productName": "FantasyMapConverter",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Utility to convert data from Azgaar's Fantasy Map Generator to EncounterPlus",
   "main": "index.js",
   "scripts": {
@@ -26,7 +26,8 @@
         ]
     },
     "extraResources": [
-      "charges/**"
+      "charges/**",
+      "*.otf"
     ],
     "afterSign": "scripts/notarize.js",
     "publish": [

@@ -803,11 +803,30 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 })
             })
         }).catch(e=>console.log(e))
+        if (win?.webContents)
+            win.webContents.executeJavaScript(`
+                document.querySelector('#progressDetail').textContent = "Finishing module assembly - Adding Font Awesome";
+                `)
         console.log("Adding font-awesome")
-        module.addLocalFile(path.join(require.resolve('@fortawesome/fontawesome-free'),"../../css/all.min.css"),"assets/css/fontawesome/css")
-        module.addLocalFolder(path.join(require.resolve('@fortawesome/fontawesome-free'),"../../webfonts"),"assets/css/fontawesome/webfonts")
+        const fontAwesome = path.join(require.resolve('@fortawesome/fontawesome-free'),"../..")
+        module.addFile("assets/css/fontawesome/css/all.min.css",fs.readFileSync(path.join(fontAwesome,"css/all.min.css")))
+        for (let webfont of fs.readdirSync(path.join(fontAwesome,"webfonts"))) {
+            webfont = path.join(fontAwesome,"webfonts",webfont)
+            module.addFile(`assets/css/fontawesome/webfonts/${path.basename(webfont)}`,fs.readFileSync(webfont))
+        }
+        if (win?.webContents)
+            win.webContents.executeJavaScript(`
+                document.querySelector('#progressDetail').textContent = "Finishing module assembly - Adding Dungeon Drop Case font";
+                `)
         console.log("Adding Dungeon Drop Case and custom.css")
-        module.addLocalFile('Dungeon Drop Case.otf','assets/fonts')
+        if (fs.existsSync(path.join(__dirname,"..","Dungeon Drop Case.otf")))
+            module.addLocalFile(path.join(__dirname,"..",'Dungeon Drop Case.otf'),'assets/fonts')
+        else
+            module.addLocalFile('Dungeon Drop Case.otf','assets/fonts')
+        if (win?.webContents)
+            win.webContents.executeJavaScript(`
+                document.querySelector('#progressDetail').textContent = "Finishing module assembly - Creating custom.css";
+                `)
         module.addFile("assets/css/custom.css",`@import 'fontawesome/css/all.min.css';
     @font-face {
         font-family: 'Dungeon Drop Case';
@@ -825,6 +844,10 @@ module.exports = (mapfile,mapsvg,win=null) => {
       color: #58180d;
     }
         `)
+        if (win?.webContents)
+            win.webContents.executeJavaScript(`
+                document.querySelector('#progressDetail').textContent = "Finishing module assembly - Adding Mapception to module";
+                `)
         console.log("Adding map")
         module.addFile(`${continent}_map.webp`,mapimage)
         const mapModule = new AdmZip()
@@ -843,7 +866,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
             })).filePath
         console.log(destination)
         if (destination) {
-            module.writeZip(`${continent}.module`)
+            module.writeZip(destination)
             if (win?.webContents)
                 win.webContents.executeJavaScript(`
                     document.querySelector('#progressBar').value = 1;
