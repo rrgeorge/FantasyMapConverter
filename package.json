@@ -20,6 +20,11 @@
       "entitlements": "entitlements.mac.plist",
       "entitlementsInherit": "entitlements.mac.plist"
     },
+    "linux": {
+        "target": [
+            "AppImage"
+        ]
+    },
     "afterSign": "scripts/notarize.js",
     "publish": [
       "github"
