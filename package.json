@@ -1,16 +1,30 @@
 {
   "name": "fantasymapconverter",
+  "productName": "FantasyMapConverter",
   "version": "1.0.0",
   "description": "Utility to convert data from Azgaar's Fantasy Map Generator to EncounterPlus",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": { 
-      "name": "Robert R George",
-      "email": "rrgeorge@rrgeorge.com"
+  "author": {
+    "name": "Robert R George",
+    "email": "rrgeorge@rrgeorge.com"
   },
   "license": "MIT",
+  "build": {
+    "appId": "online.play5e.FantasyMapConverter",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist"
+    },
+    "afterSign": "scripts/notarize.js",
+    "publish": [
+      "github"
+    ]
+  },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^5.15.4",
     "adm-zip": "^0.5.9",
@@ -31,6 +45,7 @@
   },
   "devDependencies": {
     "electron": "^16.0.1",
-    "electron-builder": "^22.14.5"
+    "electron-builder": "^22.14.5",
+    "electron-notarize": "^1.1.1"
   }
 }
