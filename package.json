@@ -1,0 +1,36 @@
+{
+  "name": "fantasymapconverter",
+  "version": "1.0.0",
+  "description": "Utility to convert data from Azgaar's Fantasy Map Generator to EncounterPlus",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": { 
+      "name": "Robert R George",
+      "email": "rrgeorge@rrgeorge.com"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^5.15.4",
+    "adm-zip": "^0.5.9",
+    "d3": "^5.8.0",
+    "delaunator": "^4.0.1",
+    "jquery": "^3.6.0",
+    "jsdom": "^18.1.0",
+    "jstoxml": "^2.2.5",
+    "markdown-it": "^12.2.0",
+    "markdown-it-anchor": "^8.4.1",
+    "markdown-it-attrs": "^4.1.0",
+    "markdown-it-fontawesome": "^0.3.0",
+    "markdown-it-imsize": "^2.0.1",
+    "markdown-it-multimd-table": "^4.1.1",
+    "puppeteer": "^11.0.0",
+    "slugify": "^1.6.2",
+    "uuid": "^8.3.2"
+  },
+  "devDependencies": {
+    "electron": "^16.0.1",
+    "electron-builder": "^22.14.5"
+  }
+}
