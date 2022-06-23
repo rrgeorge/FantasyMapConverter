@@ -72,13 +72,13 @@
     "markdown-it-fontawesome": "^0.3.0",
     "markdown-it-imsize": "^2.0.1",
     "markdown-it-multimd-table": "^4.1.1",
-    "puppeteer-core": "^11.0.0",
+    "puppeteer-core": "^15.0.0",
     "slugify": "^1.6.2",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
-    "electron": "^16.2.8",
-    "electron-builder": "^22.14.5",
+    "electron": "^19.0.6",
+    "electron-builder": "^23.1.0",
     "electron-notarize": "^1.1.1"
   }
 }
