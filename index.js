@@ -1,9 +1,13 @@
-const { app, BrowserWindow, shell, ipcMain } = require('electron')
+const { app, BrowserWindow, shell, ipcMain, remote } = require('electron')
 const path = require('path')
 const fmgconvert = require('./fmgconvert')
 const puppeteer = require('puppeteer-core')
 let _win;
-app.on('ready',()=>{
+if (process.argv.length>1) {
+    const args = process.argv
+    fmgconvert(args[args.length-2],args[args.length-1])
+}
+app?.on('ready',()=>{
     _win = new BrowserWindow({
         webPreferences: {
             nodeIntegration: true,
@@ -18,4 +22,4 @@ app.on('ready',()=>{
         }
     })
 })
-ipcMain.on('convert',(e,f,s)=>fmgconvert(f,s,_win))
+ipcMain?.on('convert',(e,f,s)=>fmgconvert(f,s,_win))

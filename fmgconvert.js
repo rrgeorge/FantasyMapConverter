@@ -251,7 +251,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
     fs.readFile(mapfile,async (err,data)=>{
         if (err) { console.log(err); return }
         const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(),"fmg"))
-        const browserFetcher = puppeteer.createBrowserFetcher({ path: path.join(app.getPath("userData"),"chromium")})
+        const browserFetcher = puppeteer.createBrowserFetcher({ path: path.join(app?.getPath("userData")||'./',"chromium")})
         const browserRevisions = await browserFetcher.localRevisions()
         let browserPath = browserFetcher.revisionInfo(browserRevisions[0])?.executablePath
         if (browserRevisions.length = 0||!fs.existsSync(browserFetcher.revisionInfo(browserRevisions[0]).executablePath)) {
@@ -288,11 +288,13 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 if (e) { console.log(e); return }
                 const svg = d.toString()
                 const tmpsvgpage = path.join(tmp,"mapsvg.html")
-                fs.writeFile(tmpsvgpage,`<!DOCTYPE html><html><head><style>* { margin: 0; padding: 0; }</style></head><body>${svg}</body></html>`,()=>{
+                fs.writeFile(tmpsvgpage,`<!DOCTYPE html><html><head><meta charset="utf-8"/><style>* { margin: 0; padding: 0; }</style></head><body>${svg}</body></html>`,()=>{
                     mapPage.goto(`file://${tmpsvgpage}`)
                         .then(()=>mapPage.waitForSelector('svg')
                             .then(mapPage.evaluate(()=>{
                                 const s = document.querySelector('svg')
+                                s?.querySelector('#labels')?.setAttribute('display','none')
+                                s?.querySelector('#markers')?.setAttribute('display','none')
                                 let width = parseInt(s?.getAttribute('width')||1000)
                                 let height = parseInt(s?.getAttribute('height')||1000)
                                 /*
@@ -307,8 +309,6 @@ module.exports = (mapfile,mapsvg,win=null) => {
                                 .then(size=>mapPage.setViewport({width: size.width,height: size.height, deviceScaleFactor: (size.width>size.height)?8192/size.width:8192/size.height})
                                     .then(()=>mapPage.screenshot({type: 'webp'})
                                         .then(image=>{
-                                            fs.unlink(tmpsvgpage,()=>{})
-                                            mapPage.close()
                                             resolve(image)
                                         })))))
                 })
@@ -317,7 +317,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
         page.on('console', (msg) => console.log('PAGE LOG:', msg.text(),msg));
         const convert = async (svg)=>{
             const tmpsvgpage = path.join(tmp,"svg.html")
-            fs.writeFileSync(tmpsvgpage,`<!DOCTYPE html><html><head><style>* { margin: 0; padding: 0; }</style></head><body>${svg}</body></html>`)
+            fs.writeFileSync(tmpsvgpage,`<!DOCTYPE html><html><head><meta charset="utf-8"/><style>* { margin: 0; padding: 0; }</style></head><body>${svg}</body></html>`)
             await page.goto(`file://${tmpsvgpage}`)
             await page.waitForSelector('svg')
             size = await page.evaluate(()=>
@@ -331,6 +331,30 @@ module.exports = (mapfile,mapsvg,win=null) => {
             await page.setViewport(size)
             const image = await page.screenshot({type: 'webp',omitBackground: true})
             fs.unlinkSync(tmpsvgpage)
+            if (win?.webContents)
+                win.webContents.executeJavaScript(`
+                    document.querySelector('#progressImage').src = "data:image/webp;base64,${image.toString('base64')}";
+                    `)
+            return image
+        }
+        const getRegionalMap = async (x,y,w,h,l=false)=>{
+            await mapPage.waitForSelector('svg')
+            const scale = (w>h)?2048/w:2048/h
+            size = await mapPage.evaluate((x,y,w,h,scale,l)=>
+                {
+                    console.log(`${x} ${y} ${w} ${h}`)
+                    const s = document.querySelector('svg')
+                    if (l)
+                        s.querySelector('#labels')?.removeAttribute('display')
+                    else
+                        s.querySelector('#labels')?.setAttribute('display','none')
+                    s.setAttribute('viewBox',`${x} ${y} ${w} ${h}`)
+                    s.setAttribute('width',parseInt(w*scale))
+                    s.setAttribute('height',parseInt(h*scale))
+                },x,y,w,h,scale,l
+            )
+            await mapPage.setViewport({width:parseInt(w*scale),height:parseInt(h*scale)})
+            const image = await mapPage.screenshot({type: 'webp',omitBackground: true})
             if (win?.webContents)
                 win.webContents.executeJavaScript(`
                     document.querySelector('#progressImage').src = "data:image/webp;base64,${image.toString('base64')}";
@@ -376,11 +400,12 @@ module.exports = (mapfile,mapsvg,win=null) => {
         if (settings[13]) urbanization = settings[13];
         if (settings[24]) urbanDensity = +settings[24];
 
+        let gridSize = parseInt(((distanceScale*25)/Math.sqrt(3))*scale)
         let mapmarkers = [
             { name: continent },
             { name: slugify(continent) },
-            { gridSize: parseInt(((distanceScale*25)/Math.sqrt(3))*scale) },
-            { gridOffsetY: parseInt(((distanceScale*25)/Math.sqrt(3))*scale*-1) },
+            { gridSize: gridSize },
+            { gridOffsetY: gridSize*-1 },
             { gridScale: distanceScale*25 },
             { gridUnits: distanceUnit },
             { gridType: "hexPointy" },
@@ -400,13 +425,14 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 { author: "Azgaar Fantasy Map Generator" },
                 { slug: slugify(continent) },
                 { image: `${continent}_map.webp` },
-                { _name: "map", _attrs: { id: uuid5("MapObject",uuid) }, _content: mapmarkers}
+                { _name: "map", _attrs: { id: uuid5(slugify(continent),uuid) }, _content: mapmarkers}
             ]
         }
         let moduleinfo = `id: ${uuid}\n`
             + `name: ${continent}\n`
             + `slug: ${slugify(continent)}\n`
             + `cover: ${continent}_map.webp\n`
+            + 'delete-empty-groups: true\n'
             + `maps:\n`
             + ' - path: map.zip\n'
             + '   order: 4\n'
@@ -498,21 +524,21 @@ module.exports = (mapfile,mapsvg,win=null) => {
         }
         const nationgroup = uuid5(slugify("Nations"),uuid)
         mod._content.push({ group: {
-            _attrs: { id: nationgroup },
+            _attrs: { id: nationgroup, sort: 1 },
             name: "Nations",
-            slug: slugify("Nations")
+            slug: slugify("Nations")           
         } })
         const culturegroup = uuid5(slugify("Cultures"),uuid)
         mod._content.push({ group: {
-            _attrs: { id: culturegroup },
+            _attrs: { id: culturegroup, sort: 2 },
             name: "Cultures",
-            slug: slugify("Cultures")
+            slug: slugify("Cultures"),
         } })
         const religiongroup = uuid5(slugify("Religions"),uuid)
         mod._content.push({ group: {
-            _attrs: { id: religiongroup },
+            _attrs: { id: religiongroup, sort: 3 },
             name: "Religions",
-            slug: slugify("Religions")
+            slug: slugify("Religions"),
         } })
         console.log(`Processing ${states.length} states:`)
         const module = new AdmZip()
@@ -520,7 +546,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
         for (const state of states) {
             if (state.removed) continue
             const stateName = state.fullName||state.name
-            const stateSlug = slugify(stateName)
+            const stateSlug = `state-${state.i}-${slugify(stateName)}`
             const stateId = uuid5(stateSlug,uuid)
             if (win?.webContents)
                 win.webContents.executeJavaScript(`
@@ -530,7 +556,26 @@ module.exports = (mapfile,mapsvg,win=null) => {
                     `)
             else
                 console.log(`->${stateName}`)
-            state.coa && module.addFile(`images/coa/s/${stateSlug}.webp`,await convert(await coa.trigger(stateSlug,state.coa)))
+            state.coa && module.addFile(`/images/coa/s/${stateSlug}.webp`,await convert(await coa.trigger(stateSlug,state.coa)))
+            if (state.i>0) {
+                let sX, sY, sX2, sY2
+                for (let cell=0;cell<cells.state.length;cell++) {
+                    if (cells.state[cell] !== state.i) continue
+                    if (sX === undefined || sX > cells.p[cell][0]) sX = cells.p[cell][0]
+                    if (sY === undefined || sY > cells.p[cell][1]) sY = cells.p[cell][1]
+                    if (sX2 === undefined || sX2 < cells.p[cell][0]) sX2 = cells.p[cell][0]
+                    if (sY2 === undefined || sY2 < cells.p[cell][1]) sY2 = cells.p[cell][1]
+                }
+                sX = Math.floor(sX-gridSize)
+                sY = Math.floor(sY-gridSize)
+                sX2 = Math.ceil(sX2+gridSize)
+                sY2 = Math.ceil(sY2+gridSize)
+                if (sX < 0) sX = 0
+                if (sY < 0) sY = 0
+                let sW = sX2 - sX
+                let sH = sY2 - sY
+                module.addFile(`/images/maps/s/${stateSlug}.webp`, await getRegionalMap(sX,sY,sW,sH,true))
+            }
             const pageInfo = '---\n'
                 + `name: ${stateName}\n`
                 + `slug: ${stateSlug}\n`
@@ -538,29 +583,30 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 + `order: ${state.i}\n`
                 + '---\n'
             const pageContent = `| ${stateName}  ||\n`
-                + `${(state.coa)?`| ![${stateName}](images/coa/s/${stateSlug}.webp =300x){.center} ||\n`:''}`
+                + `${(state.coa)?`| ![${stateName}](/images/coa/s/${stateSlug}.webp =300x){.center} ||\n`:''}`
                 + '|----------------|-----------------|\n'
                 + `| **Government:**   | ${state.form} |\n`
-                + `${(state.capital)?`| **Capital:**   | [![${burgs[state.capital]?.name}](images/coa/b/burg-${slugify(burgs[state.capital]?.name)}.webp =25x) ${burgs[state.capital]?.name}](/page/burg-${slugify(burgs[state.capital]?.name)}) |\n`:''}`
+                + `${(state.capital)?`| **Capital:**   | [![${burgs[state.capital]?.name}](/images/coa/b/burg-${state.capital}-${slugify(burgs[state.capital]?.name)}.webp =25x) ${burgs[state.capital]?.name}](/page/burg-${state.capital}-${slugify(burgs[state.capital]?.name)}) |\n`:''}`
                 + `| **Population** | ${getSI((state.urban+state.rural)*populationRate)} *(${getSI(state.urban*populationRate)} urban, ${getSI(state.rural*populationRate)} rural)* |\n`
                 + `${(state.area>0)?`| **Area:**       | ${getSI(state.area * distanceScale ** 2)} ${distanceUnit}²   |\n`:''}`
                 + `${(state.provinces.length>0)?`| **Provinces:**   ||\n| ${state.provinces.map(p=>{
                     if (provinces[p].removed) return ''
                     const n = provinces[p].fullName||provinces[p].name
-                    return `[![${n}](images/coa/p/province-${slugify(n)}.webp =25x) ${n}](/page/province-${slugify(n)})`
+                    return `[![${n}](/images/coa/p/province-${p}-${slugify(n)}.webp =25x) ${n}](/page/province-${p}-${slugify(n)})`
                     }).filter(f=>f).join(' ||\n| ')}   ||\n`:''}`
                 + `${(state.i>0)?`| **Diplomatic Relations:**   ||\n| ${state.diplomacy.map((d,s)=>{
                     if (states[s].removed||d=='x') return
                     const n = states[s].fullName||states[s].name
-                    return `[![${n}](images/coa/s/${slugify(n)}.webp =25x) ${n}](/page/${slugify(n)}) | ${d}`
+                    return `[![${n}](/images/coa/s/state-${s}-${slugify(n)}.webp =25x) ${n}](/page/state-${s}-${slugify(n)}) | ${d}`
                     }).filter(f=>f).join(' |\n| ')}   |\n`:''}`
                 + `{.header-title-fancy}\n`
+                + `${(state.i>0)?`\n![${stateName}](/images/maps/s/${stateSlug}.webp){.center}\n`:''}`
             module.addFile(`Nations/${stateSlug}.md`,pageInfo+pageContent)
             mod._content.push({ page: {
                 _attrs: { id: stateId, parent: nationgroup, sort: state.i },
                 name: stateName,
                 slug: stateSlug,
-                content: md.render(pageContent)
+                content: md.render(pageContent.replace(/\/images\//g,'./images/'))
                 } })
             state.pole && mapmarkers.push( { marker: {
                 name: state.fullName||state.name,
@@ -579,7 +625,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 const p = provinces[province]
                 if (p.removed) continue
                 const pName = p.fullName||p.name
-                const pSlug = "province-"+slugify(pName)
+                const pSlug = `province-${p.i}-${slugify(pName)}`
                 const pId = uuid5(pSlug,uuid)
                 if (win?.webContents)
                     win.webContents.executeJavaScript(`
@@ -590,14 +636,28 @@ module.exports = (mapfile,mapsvg,win=null) => {
                     console.log(`  -> ${pName}`)
                 let urban = 0
                 let rural = 0
+                let pX, pY, pX2, pY2
                 for (let i = 0; i<cells.province.length; i++) {
                     if (cells.province[i] === p.i) {
+                        if (pX === undefined || pX > cells.p[i][0]) pX = cells.p[i][0]
+                        if (pY === undefined || pY > cells.p[i][1]) pY = cells.p[i][1]
+                        if (pX2 === undefined || pX2 < cells.p[i][0]) pX2 = cells.p[i][0]
+                        if (pY2 === undefined || pY2 < cells.p[i][1]) pY2 = cells.p[i][1]
                         if (burgs.find(b=>b.cell===i))
                             urban += burgs.find(b=>b.cell===i).population
                         rural += cells.pop[i]
                     }
                 }
-                p.coa && module.addFile(`images/coa/p/${pSlug}.webp`,await convert(await coa.trigger(pSlug,p.coa)))
+                pX = Math.floor(pX-gridSize)
+                pY = Math.floor(pY-gridSize)
+                pX2 = Math.ceil(pX2+gridSize)
+                pY2 = Math.ceil(pY2+gridSize)
+                if (pX < 0) pX = 0
+                if (pY < 0) pY = 0
+                let pW = pX2 - pX
+                let pH = pY2 - pY
+                module.addFile(`/images/maps/p/${pSlug}.webp`, await getRegionalMap(pX,pY,pW,pH))
+                p.coa && module.addFile(`/images/coa/p/${pSlug}.webp`,await convert(await coa.trigger(pSlug,p.coa)))
                 const pageInfo = '---\n'
                     + `name: ${pName}\n`
                     + `slug: ${pSlug}\n`
@@ -607,28 +667,29 @@ module.exports = (mapfile,mapsvg,win=null) => {
                     + '---\n'
                 const pageContent = `| ${pName}  ||\n`
                     + `| *[${stateName}](/page/${stateSlug})* ||\n`
-                    + `${(p.coa)?`| ![${pName}](images/coa/p/${pSlug}.webp =300x){.center} ||\n`:''}`
+                    + `${(p.coa)?`| ![${pName}](/images/coa/p/${pSlug}.webp =300x){.center} ||\n`:''}`
                     + '|----------------|-----------------|\n'
-                    + `${(p.burg)?`| **Capital:**   | [![${burgs[p.burg]?.name}](images/coa/b/burg-${slugify(burgs[p.burg]?.name)}.webp =25x) ${burgs[p.burg]?.name}](/page/burg-${slugify(burgs[p.burg]?.name)})   |\n`:''}`
+                    + `${(p.burg)?`| **Capital:**   | [![${burgs[p.burg]?.name}](/images/coa/b/burg-${p.burg}-${slugify(burgs[p.burg]?.name)}.webp =25x) ${burgs[p.burg]?.name}](/page/burg-${p.burg}-${slugify(burgs[p.burg]?.name)})   |\n`:''}`
                     + `| **Population** | ${getSI((urban+rural)*populationRate)} *(${getSI(urban*populationRate)} urban, ${getSI(rural*populationRate)} rural)* |\n`
                     + `${(p.area>0)?`| **Area:**       | ${getSI(p.area * distanceScale ** 2)} ${distanceUnit}²   |\n`:''}`
                     + `${(p.burgs?.filter(b=>b!=p.burg).length>0)?`| **Towns:**   ||\n| ${p.burgs.filter(b=>b!=p.burg).map(b=>{
                         const n = burgs[b].name
-                        return `[![${n}](images/coa/b/burg-${slugify(n)}.webp =25x) ${n}](/page/burg-${slugify(n)})`
+                        return `[![${n}](/images/coa/b/burg-${b}-${slugify(n)}.webp =25x) ${n}](/page/burg-${b}-${slugify(n)})`
                         }).filter(f=>f).join(' ||\n| ')}   ||\n`:''}`
                     + `{.header-title-fancy}\n`
-                module.addFile(`Nations/${pSlug}.md`,pageInfo+pageContent)
+                    + `\n![${pName}](/images/maps/p/${pSlug}.webp){.center}\n`
+                module.addFile(`Nations/${stateSlug}/${pSlug}.md`,pageInfo+pageContent)
                 mod._content.push( { page: {
                     _attrs: { id: pId, parent: stateId, sort: p.i },
                     name: pName,
                     slug: pSlug,
-                    content: md.render(pageContent)
+                    content: md.render(pageContent.replace(/\/images\//g,'./images/'))
                 } } )
                 mapmarkers.push( { marker: {
                     name: p.fullName||p.name,
                     color: p.color,
                     shape: "label",
-                    size: "medium",
+                    size: "large",
                     hidden: "YES",
                     locked: "YES",
                     x: parseInt(p.pole[0]*scale),
@@ -641,14 +702,14 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 for (let b of pBurgs) {
                     if (b.removed) continue
                     progress += (1/states.length)*(1/state.provinces.length)*(1/pBurgs.length)
-                    let bSlug = "burg-"+slugify(b.name)
+                    let bSlug = `burg-${b.i}-${slugify(b.name)}`
                     let bId = uuid5(bSlug,uuid)
                     if (win?.webContents)
                         win.webContents.executeJavaScript(`
                             document.querySelector('#progressDetail').textContent = "Processing ${stateName}: ${pName} (${b.name})";
                             `)
                     const MFCGLink = getMFCGlink(b)
-                    b.coa && module.addFile(`images/coa/b/${bSlug}.webp`,await convert(await coa.trigger(bSlug,b.coa)))
+                    b.coa && module.addFile(`/images/coa/b/${bSlug}.webp`,await convert(await coa.trigger(bSlug,b.coa)))
                     const pageInfo = '---\n'
                         + `name: ${b.name}\n`
                         + `slug: ${bSlug}\n`
@@ -658,10 +719,10 @@ module.exports = (mapfile,mapsvg,win=null) => {
                         + '---\n'
                     const pageContent = `| ${b.name}  ||\n`
                         + `| *[${pName}](/page/${pSlug}), [${stateName}](/page/${stateSlug})* ||\n`
-                        + `${(b.coa)?`| ![${b.name}](images/coa/b/${bSlug}.webp =300x){.center} ||\n`:''}`
+                        + `${(b.coa)?`| ![${b.name}](/images/coa/b/${bSlug}.webp =300x){.center} ||\n`:''}`
                         + '|------------------|-----------------|\n'
                         + `| **Type:**        | ${b.type} |\n`
-                        + `| **Culture:**     | [${cultures[b.culture].name}](culture-${slugify(cultures[b.culture].name)}) |\n`
+                        + `| **Culture:**     | [${cultures[b.culture].name}](/page/culture-${b.culture}-${slugify(cultures[b.culture].name)}) |\n`
                         + `| **Population:**  | ${getSI(b.population*populationRate)} |\n`
                         + `| **Elevation:**   | ${getHeight(pack.cells.h[b.cell])} |\n`
                         + `| **Temperature:** | ${convertTemperature(grid.cells.temp[pack.cells.g[b.cell]])} |\n`
@@ -669,19 +730,19 @@ module.exports = (mapfile,mapsvg,win=null) => {
                         + `{.header-title-fancy}\n\n`
                         + `[View in City Generator by Watabou](${MFCGLink})\n`
                         + `<iframe sandbox="allow-scripts allow-same-origin" style="pointer-events: none; border: 0; width: 100%; height: 50vh" src="${MFCGLink}"></iframe>`
-                    module.addFile(`Nations/${bSlug}.md`,pageInfo+pageContent)
+                    module.addFile(`Nations/${stateSlug}/${pSlug}/${bSlug}.md`,pageInfo+pageContent)
                     mod._content.push( { page: {
                         _attrs: { id: bId, parent: pId, sort: b.i },
                         name: b.name,
                         slug: bSlug,
-                        content: md.render(pageContent)
+                        content: md.render(pageContent.replace(/\/images\//g,'./images/'))
                     } } )
                     mapmarkers.push( { marker: {
                         name: b.name,
                         color: '#ff0000',
                         shape: "circle",
                         label: (b.capital)?"\u2B50":(b.port)?"\u2693":"",
-                        size: (b.capital)? "small":"small",//"tiny",
+                        size: (b.capital)? "medium":(b.population*populationRate>10000)?"small":"tiny",
                         hidden: "YES",
                         locked: "YES",
                         x: parseInt(b.x*scale),
@@ -705,7 +766,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 win.webContents.executeJavaScript(`
                     document.querySelector('#progressDetail').textContent = "${c.name} Culture";
                     `)
-            const cSlug = 'culture-'+slugify(c.name)
+            const cSlug = `culture-${c.i}-${slugify(c.name)}`
             const cId = uuid5(cSlug,uuid)
             const cReligions = religions.filter(r=>r.culture===c.i)
             const pageInfo = '---\n'
@@ -720,7 +781,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 + `| **Etymology:**   | ${nameBases[c.base].name} |\n`
                 + `| **Population:**  | ${getSI((c.urban+c.rural)*populationRate)} *(${getSI(c.urban*populationRate)} urban, ${getSI(c.rural*populationRate)} rural)* |\n`
                 + `${(cReligions.length>0)?`| **Religions:**   | ${cReligions.map(r=>
-                    `[${r.name}](/page/religion-${slugify(r.name)})`)
+                    `[${r.name}](/page/religion-${r.i}-${slugify(r.name)})`)
                         .join(' |\n|      |')} |`:''}`
                 + `{.header-title-fancy}`
             module.addFile(`Cultures/${cSlug}.md`,pageInfo+pageContent)
@@ -728,7 +789,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 _attrs: { id: cId, parent: culturegroup, sort: c.i },
                 name: c.name,
                 slug: cSlug,
-                content: md.render(pageContent)
+                content: md.render(pageContent.replace(/\/images\//g,'./images/'))
             } })
         }
         for (let marker of pack.markers) {
@@ -755,7 +816,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 win.webContents.executeJavaScript(`
                     document.querySelector('#progressDetail').textContent = "${r.name} Religion";
                     `)
-            const rSlug = 'religion-'+slugify(r.name)
+            const rSlug = `religion-${r.i}-${slugify(r.name)}`
             const rId = uuid5(rSlug,uuid)
             const pageInfo = '---\n'
                 + `name: ${r.name}\n`
@@ -775,7 +836,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 _attrs: { id: rId, parent: religiongroup, sort: r.i },
                 name: r.name,
                 slug: rSlug,
-                content: md.render(pageContent)
+                content: md.render(pageContent.replace(/\/images\//g,'./images/'))
             } })
         }
         if (win?.webContents)
@@ -787,9 +848,9 @@ module.exports = (mapfile,mapsvg,win=null) => {
         console.log("Adding Module.yaml")
         module.addFile('Module.yaml',moduleinfo)
         module.addFile('images/Group.yaml','include-in: files')
-        module.addFile('Nations/Group.yaml','slug: nations')
-        module.addFile('Cultures/Group.yaml','slug: cultures')
-        module.addFile('Religions/Group.yaml','slug: religions')
+        module.addFile('Nations/Group.yaml','slug: nations\norder: 1')
+        module.addFile('Cultures/Group.yaml','slug: cultures\norder: 2')
+        module.addFile('Religions/Group.yaml','slug: religions\norder: 3')
         console.log("Adding global.css from the module-packer")
         const https = require('https')
         await new Promise((resolve,reject)=>{
@@ -818,21 +879,11 @@ module.exports = (mapfile,mapsvg,win=null) => {
             win.webContents.executeJavaScript(`
                 document.querySelector('#progressDetail').textContent = "Finishing module assembly - Adding Dungeon Drop Case font";
                 `)
-        console.log("Adding Dungeon Drop Case and custom.css")
-        if (fs.existsSync(path.join(__dirname,"..","Dungeon Drop Case.otf")))
-            module.addLocalFile(path.join(__dirname,"..",'Dungeon Drop Case.otf'),'assets/fonts')
-        else
-            module.addLocalFile('Dungeon Drop Case.otf','assets/fonts')
         if (win?.webContents)
             win.webContents.executeJavaScript(`
                 document.querySelector('#progressDetail').textContent = "Finishing module assembly - Creating custom.css";
                 `)
         module.addFile("assets/css/custom.css",`@import 'fontawesome/css/all.min.css';
-    @font-face {
-        font-family: 'Dungeon Drop Case';
-        src: 
-            url('../fonts/Dungeon Drop Case.otf') format("opentype");
-    }
     em.gray {
         color: lightgray
     }
@@ -886,8 +937,9 @@ module.exports = (mapfile,mapsvg,win=null) => {
                     document.querySelector('#progressDetail').textContent = "Aborted. Module not saved.";
                     `)
         }
+        await mapPage.close()
         await browser.close()
-        fs.rmdirSync(tmp)
+        fs.rmSync(tmp,{recursive:true,force:true})
         if (win?.webContents)
             win.webContents.executeJavaScript(`
                 document.querySelector('#progressBar').style.display = 'none';

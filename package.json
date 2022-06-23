@@ -1,7 +1,7 @@
 {
   "name": "fantasymapconverter",
   "productName": "FantasyMapConverter",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Utility to convert data from Azgaar's Fantasy Map Generator to EncounterPlus",
   "main": "index.js",
   "scripts": {
@@ -21,9 +21,9 @@
       "entitlementsInherit": "entitlements.mac.plist"
     },
     "linux": {
-        "target": [
-            "AppImage"
-        ]
+      "target": [
+        "AppImage"
+      ]
     },
     "extraResources": [
       "charges/**",
