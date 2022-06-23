@@ -5,7 +5,10 @@
   "description": "Utility to convert data from Azgaar's Fantasy Map Generator to EncounterPlus",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "app": "electron index.js",
+    "build": "electron-builder build -mwl",
+    "release": "electron-builder build -p always -mwl"
   },
   "author": {
     "name": "Robert R George",
@@ -18,11 +21,32 @@
       "category": "public.app-category.utilities",
       "hardenedRuntime": true,
       "entitlements": "entitlements.mac.plist",
-      "entitlementsInherit": "entitlements.mac.plist"
+      "entitlementsInherit": "entitlements.mac.plist",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": "universal"
+        },
+        {
+          "target": "zip",
+          "arch": "universal"
+        }
+      ]
     },
     "linux": {
       "target": [
-        "AppImage"
+        {
+          "target": "AppImage",
+          "arch": "x64"
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": "x64"
+        }
       ]
     },
     "extraResources": [

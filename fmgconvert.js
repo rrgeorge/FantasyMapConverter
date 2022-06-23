@@ -685,6 +685,9 @@ module.exports = (mapfile,mapsvg,win=null) => {
                     slug: pSlug,
                     content: md.render(pageContent.replace(/\/images\//g,'./images/'))
                 } } )
+                if (!p.pole) {
+                    p.pole = cells.p[p.center]
+                }
                 mapmarkers.push( { marker: {
                     name: p.fullName||p.name,
                     color: p.color,
