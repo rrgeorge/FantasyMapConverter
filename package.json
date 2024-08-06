@@ -1,7 +1,7 @@
 {
   "name": "fantasymapconverter",
   "productName": "FantasyMapConverter",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Utility to convert data from Azgaar's Fantasy Map Generator to EncounterPlus",
   "main": "index.js",
   "scripts": {
@@ -22,6 +22,7 @@
       "hardenedRuntime": true,
       "entitlements": "entitlements.mac.plist",
       "entitlementsInherit": "entitlements.mac.plist",
+      "notarize": true,
       "target": [
         {
           "target": "dmg",
@@ -53,7 +54,9 @@
       "charges/**",
       "*.otf"
     ],
-    "afterSign": "scripts/notarize.js",
+    "files": [
+        "!scripts"
+    ],
     "publish": [
       "github"
     ]
@@ -78,7 +81,7 @@
   },
   "devDependencies": {
     "electron": "^19.0.6",
-    "electron-builder": "^23.1.0",
+    "electron-builder": "^24.13.3",
     "electron-notarize": "^1.1.1"
   }
 }

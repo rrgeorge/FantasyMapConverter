@@ -2,11 +2,13 @@ const { app, BrowserWindow, shell, ipcMain, remote } = require('electron')
 const path = require('path')
 const fmgconvert = require('./fmgconvert')
 let _win;
-/*
-if (process.argv.length>1) {
+
+if (process.argv.length>2) {
     const args = process.argv
+    console.log("CLI MODE")
+    console.log(args[args.length-2],args[args.length-1])
     require('./fmgconvert')(args[args.length-2],args[args.length-1])
-}*/
+}
 app?.on('ready',()=>{
     _win = new BrowserWindow({
         webPreferences: {

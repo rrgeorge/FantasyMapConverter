@@ -314,23 +314,39 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 })
             })
         })
-        page.on('console', (msg) => console.log('PAGE LOG:', msg.text(),msg));
-        const convert = async (svg)=>{
-            const tmpsvgpage = path.join(tmp,"svg.html")
-            fs.writeFileSync(tmpsvgpage,`<!DOCTYPE html><html><head><meta charset="utf-8"/><style>* { margin: 0; padding: 0; }</style></head><body>${svg}</body></html>`)
-            await page.goto(`file://${tmpsvgpage}`)
-            await page.waitForSelector('svg')
-            size = await page.evaluate(()=>
-                {
-                    const s = document.querySelector('svg')
+        page.on('console', (msg) => console.log('PAGE LOG:', msg.text()))
+        const convert = async (svg,custom=false,id=null)=>{
+            if (custom) {
+                console.log("Custom COA")
+                const tmpsvgpage = path.join(tmp,"fullsvg.html")
+                await page.goto(`file://${tmpsvgpage}`)
+                await page.waitForSelector(`svg`)
+                size = await page.evaluate((imgid)=>{
+                    const s = document.querySelector(`#${imgid} image`)
                     const width = parseInt(s?.getAttribute('width')||1000)
                     const height = parseInt(s?.getAttribute('height')||1000)
-                    return {width,height}
-                }
-            )
-            await page.setViewport(size)
+                    const href = s?.getAttribute('href')
+                    return {href,width,height}
+                },id)
+                await page.goto(size.href)
+                await page.setViewport({width:size.width,height:size.height})
+            } else {
+                const tmpsvgpage = path.join(tmp,"svg.html")
+                fs.writeFileSync(tmpsvgpage,`<!DOCTYPE html><html><head><meta charset="utf-8"/><style>* { margin: 0; padding: 0; }</style></head><body>${svg}</body></html>`)
+                await page.goto(`file://${tmpsvgpage}`)
+                await page.waitForSelector(`svg`)
+                size = await page.evaluate(()=>
+                    {
+                        const s = document.querySelector('svg')
+                        const width = parseInt(s?.getAttribute('width')||1000)
+                        const height = parseInt(s?.getAttribute('height')||1000)
+                        return {width,height}
+                    }
+                )
+                await page.setViewport(size)
+                fs.unlinkSync(tmpsvgpage)
+            }
             const image = await page.screenshot({type: 'webp',omitBackground: true})
-            fs.unlinkSync(tmpsvgpage)
             if (win?.webContents)
                 win.webContents.executeJavaScript(`
                     document.querySelector('#progressImage').src = "data:image/webp;base64,${image.toString('base64')}";
@@ -371,6 +387,8 @@ module.exports = (mapfile,mapsvg,win=null) => {
         const continent = settings[20]
         const url = `https://azgaar.github.io/Fantasy-Map-Generator/${continent}`
         const uuid = uuid5(url,uuid5.URL)
+        const fullsvgpage = path.join(tmp,"fullsvg.html")
+        fs.writeFileSync(fullsvgpage,`<!DOCTYPE html><html><head><meta charset="utf-8"/><style>* { margin: 0; padding: 0; }</style></head><body>${decoded[5]}</body></html>`)
         if (win?.webContents)
             win.webContents.executeJavaScript(`
                 document.querySelector('#form').style.display = "none";
@@ -556,7 +574,11 @@ module.exports = (mapfile,mapsvg,win=null) => {
                     `)
             else
                 console.log(`->${stateName}`)
-            state.coa && module.addFile(`/images/coa/s/${stateSlug}.webp`,await convert(await coa.trigger(stateSlug,state.coa)))
+            if (state.coa?.custom) {
+                module.addFile(`/images/coa/s/${stateSlug}.webp`,await convert(null,true,`stateCOA${state.i}`))
+            } else {
+                state.coa && module.addFile(`/images/coa/s/${stateSlug}.webp`,await convert(await coa.trigger(stateSlug,state.coa)))
+            }
             if (state.i>0) {
                 let sX, sY, sX2, sY2
                 for (let cell=0;cell<cells.state.length;cell++) {
@@ -657,7 +679,11 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 let pW = pX2 - pX
                 let pH = pY2 - pY
                 module.addFile(`/images/maps/p/${pSlug}.webp`, await getRegionalMap(pX,pY,pW,pH))
-                p.coa && module.addFile(`/images/coa/p/${pSlug}.webp`,await convert(await coa.trigger(pSlug,p.coa)))
+                if (p.coa?.custom) {
+                    module.addFile(`/images/coa/p/${pSlug}.webp`,await convert(null,true,`provinceCOA${p.i}`))
+                } else {
+                    p.coa && module.addFile(`/images/coa/p/${pSlug}.webp`,await convert(await coa.trigger(pSlug,p.coa)))
+                }
                 const pageInfo = '---\n'
                     + `name: ${pName}\n`
                     + `slug: ${pSlug}\n`
@@ -712,7 +738,11 @@ module.exports = (mapfile,mapsvg,win=null) => {
                             document.querySelector('#progressDetail').textContent = "Processing ${stateName}: ${pName} (${b.name})";
                             `)
                     const MFCGLink = getMFCGlink(b)
-                    b.coa && module.addFile(`/images/coa/b/${bSlug}.webp`,await convert(await coa.trigger(bSlug,b.coa)))
+                    if (b.coa?.custom) {
+                        module.addFile(`/images/coa/b/${bSlug}.webp`,await convert(null,true,`burgCOA${b.i}`))
+                    } else {
+                        b.coa && module.addFile(`/images/coa/b/${bSlug}.webp`,await convert(await coa.trigger(bSlug,b.coa)))
+                    }
                     const pageInfo = '---\n'
                         + `name: ${b.name}\n`
                         + `slug: ${bSlug}\n`
@@ -810,7 +840,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 locked: "YES",
                 x: parseInt(marker.x*scale),
                 y: parseInt(marker.y*scale),
-                description: notes.find(n=>n.id==`marker${marker.i}`)?.legend||marker.type,
+                description: md.render(notes.find(n=>n.id==`marker${marker.i}`)?.legend||marker.type),
             } } )
         }
         for (let r of religions) {
