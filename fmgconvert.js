@@ -5,7 +5,8 @@ const { toXML } = require('jstoxml')
 const AdmZip = require('adm-zip')
 const puppeteer = require('puppeteer-core')
 const path = require('path')
-const md = require('markdown-it')()
+const turndown = require('turndown');
+const md = require('markdown-it')({html: true})
     .use(require('markdown-it-multimd-table'))
     .use(require('markdown-it-fontawesome'))
     .use(require('markdown-it-attrs'))
@@ -435,6 +436,54 @@ module.exports = (mapfile,mapsvg,win=null) => {
             { lineOfSight: 'NO' },
             { image: `${continent}_map.webp` }
         ]
+        let maps = [
+            {
+                id: uuid5(slugify(continent),uuid),
+                rank: 0,
+                parentId: "",
+                areaEffects: [],
+                bookmark: false,
+                canvas: "",
+                dmDarkness: 0.6,
+                drawings: [],
+                floor: "",
+                fog: "",
+                descr: "",
+                gridColor : "#cccccc",
+                gridVisible : true,
+                height : 0,
+                lights: [],
+                losDaylight : 0,
+                losVisionLimit : -1,
+                measurements: [],
+                tiles: [],
+                tokens: [],
+                version: 1,
+                walls: [],
+                weatherIntensity : 1,
+                width : 0,
+                x : 0,
+                y : 0,
+                zoom: 1,
+                name: continent,
+                slug: slugify(continent),
+                gridSize: gridSize,
+                gridOffsetX: 0,
+                gridOffsetY: gridSize*-1,
+                gridScale: distanceScale*25,
+                gridUnits: distanceUnit,
+                gridType: "hexPointy",
+                gridStyle: "solid",
+                gridOpacity: 1.0,
+                scale: 1.0,
+                fogOfWar: false,
+                fogExploration: true,
+                lineOfSight: false,
+                image: `${continent}_map.webp`,
+                markers: [],
+                data: { dynamicMarkers: true }
+            }
+        ]
         let mod = {
             _name: "module",
             _attrs: { id: uuid },
@@ -455,7 +504,14 @@ module.exports = (mapfile,mapsvg,win=null) => {
             + ' - path: map.zip\n'
             + '   order: 4\n'
             + `   slug: ${slugify(continent)}\n`
-
+        let modjson = {
+            id: uuid,
+            name: continent,
+            slug: slugify(continent),
+            image: `${continent}_map.webp`,
+        }
+        let groups = []
+        let pages = []
         grid = JSON.parse(decoded[6]);
         calculateVoronoi(grid,grid.points);
         grid.cells.h = Uint8Array.from(decoded[7].split(","));
@@ -530,7 +586,7 @@ module.exports = (mapfile,mapsvg,win=null) => {
           function getSeaDirections(i) {
             const p1 = cells.p[i];
             const p2 = cells.p[cells.haven[i]];
-            let deg = (Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180) / Math.PI - 90;
+            let deg = (Math.atan2(p2[0] - p1[0], p2[1] - p1[1]) * 180) / Math.PI - 90;
             if (deg < 0) deg += 360;
             const norm = rn(normalize(deg, 0, 360) * 2, 2); // 0 = south, 0.5 = west, 1 = north, 1.5 = east
             return "&sea=" + norm;
@@ -546,18 +602,42 @@ module.exports = (mapfile,mapsvg,win=null) => {
             name: "Nations",
             slug: slugify("Nations")           
         } })
+        groups.push({
+            id: nationgroup,
+            bookmark: false,
+            rank: 1,
+            name: "Nations",
+            slug: slugify("Nations"),
+            parentId: ""
+        })
         const culturegroup = uuid5(slugify("Cultures"),uuid)
         mod._content.push({ group: {
             _attrs: { id: culturegroup, sort: 2 },
             name: "Cultures",
             slug: slugify("Cultures"),
         } })
+        groups.push({
+            id: culturegroup,
+            bookmark: false,
+            rank: 2,
+            name: "Cultures",
+            slug: slugify("Cultures"),
+            parentId: ""
+        })
         const religiongroup = uuid5(slugify("Religions"),uuid)
         mod._content.push({ group: {
             _attrs: { id: religiongroup, sort: 3 },
             name: "Religions",
             slug: slugify("Religions"),
         } })
+        groups.push({
+            id: religiongroup,
+            bookmark: false,
+            rank: 3,
+            name: "Religions",
+            slug: slugify("Religions"),
+            parentId: ""
+        })
         console.log(`Processing ${states.length} states:`)
         const module = new AdmZip()
         let progress = 0
@@ -630,6 +710,15 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 slug: stateSlug,
                 content: md.render(pageContent.replace(/\/images\//g,'./images/'))
                 } })
+            pages.push({
+                id: stateId,
+                bookmark: false,
+                parentId: nationgroup,
+                rank: state.i,
+                name: stateName,
+                slug: stateSlug,
+                content: md.render(pageContent.replace(/\/images\//g,'./images/'))
+            })
             state.pole && mapmarkers.push( { marker: {
                 name: state.fullName||state.name,
                 color: state.color,
@@ -641,6 +730,20 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 y: parseInt(state.pole[1]*scale),
                 content: { _attrs: { ref: `/page/${stateSlug}` } }
             } } )
+            state.pole && maps[0].markers.push({
+                id: uuid5(stateSlug+'-marker',uuid),
+                name: state.fullName||state.name,
+                color: state.color,
+                shape: "label",
+                size: "huge",
+                hidden: true,
+                locked: true,
+                label: "",
+                x: parseInt(state.pole[0]*scale),
+                y: parseInt(state.pole[1]*scale),
+                reference: `/page/${stateSlug}`,
+                descr: "",
+            })
             if (state.provinces.length===0)
                 progress += (1/states.length)
             for(const province of state.provinces) {
@@ -711,6 +814,15 @@ module.exports = (mapfile,mapsvg,win=null) => {
                     slug: pSlug,
                     content: md.render(pageContent.replace(/\/images\//g,'./images/'))
                 } } )
+                pages.push({
+                    id: pId,
+                    bookmark: false,
+                    parentId: stateId,
+                    rank: p.i,
+                    name: pName,
+                    slug: pSlug,
+                    content: md.render(pageContent.replace(/\/images\//g,'./images/'))
+                })
                 if (!p.pole) {
                     p.pole = cells.p[p.center]
                 }
@@ -725,6 +837,20 @@ module.exports = (mapfile,mapsvg,win=null) => {
                     y: parseInt(p.pole[1]*scale),
                     content: { _attrs: { ref: `/page/${pSlug}` } }
                 } } )
+                maps[0].markers.push({
+                    id: uuid5(pSlug+'-marker',uuid),
+                    name: p.fullName||p.name,
+                    color: p.color,
+                    shape: "label",
+                    size: "large",
+                    hidden: true,
+                    locked: true,
+                    label: "",
+                    x: parseInt(p.pole[0]*scale),
+                    y: parseInt(p.pole[1]*scale),
+                    reference: `/page/${pSlug}`,
+                    descr: "",
+                })
                 const pBurgs = burgs.filter(b=>cells.province[b.cell]===p.i)
                 if (pBurgs.length===0)
                     progress += (1/states.length)*(1/state.provinces.length)
@@ -770,6 +896,15 @@ module.exports = (mapfile,mapsvg,win=null) => {
                         slug: bSlug,
                         content: md.render(pageContent.replace(/\/images\//g,'./images/'))
                     } } )
+                    pages.push({
+                        id: bId,
+                        bookmark: false,
+                        parentId: pId,
+                        rank: b.i,
+                        name: b.name,
+                        slug: bSlug,
+                        content: md.render(pageContent.replace(/\/images\//g,'./images/'))
+                    })
                     mapmarkers.push( { marker: {
                         name: b.name,
                         color: '#ff0000',
@@ -782,6 +917,20 @@ module.exports = (mapfile,mapsvg,win=null) => {
                         y: parseInt(b.y*scale),
                         content: { _attrs: { ref: `/page/${bSlug}` } }
                     } } )
+                    maps[0].markers.push({
+                        id: uuid5(bSlug+'-marker',uuid),
+                        name: b.fullName||b.name,
+                        color: '#ff0000',
+                        shape: "circle",
+                        label: (b.capital)?"\u2B50":(b.port)?"\u2693":"",
+                        size: (b.capital)? "medium":(b.population*populationRate>10000)?"small":"tiny",
+                        hidden: true,
+                        locked: true,
+                        x: parseInt(b.x*scale),
+                        y: parseInt(b.y*scale),
+                        reference: `/page/${bSlug}`,
+                        descr: ""
+                    })
                 }
             }
             if (win?.webContents)
@@ -824,7 +973,17 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 slug: cSlug,
                 content: md.render(pageContent.replace(/\/images\//g,'./images/'))
             } })
+            pages.push({
+                id: cId,
+                bookmark: false,
+                parentId: culturegroup,
+                rank: c.i,
+                name: c.name,
+                slug: cSlug,
+                content: md.render(pageContent.replace(/\/images\//g,'./images/'))
+            })
         }
+        let td = new turndown()
         for (let marker of pack.markers) {
             if (win?.webContents)
                 win.webContents.executeJavaScript(`
@@ -842,6 +1001,19 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 y: parseInt(marker.y*scale),
                 description: md.render(notes.find(n=>n.id==`marker${marker.i}`)?.legend||marker.type),
             } } )
+            maps[0].markers.push( {
+                name: notes.find(n=>n.id==`marker${marker.i}`)?.name||marker.type,
+                id: uuid5(`marker-notes-${marker.i}`,uuid),
+                label: marker.icon,
+                color: '#ff00ff',
+                shape: "marker",
+                size: "small",
+                hidden: true,
+                locked: true,
+                x: parseInt(marker.x*scale),
+                y: parseInt(marker.y*scale),
+                descr: td.turndown(notes.find(n=>n.id==`marker${marker.i}`)?.legend||marker.type),
+            } )
         }
         for (let r of religions) {
             if (r.removed) continue
@@ -871,6 +1043,15 @@ module.exports = (mapfile,mapsvg,win=null) => {
                 slug: rSlug,
                 content: md.render(pageContent.replace(/\/images\//g,'./images/'))
             } })
+            pages.push({
+                id: rId,
+                bookmark: false,
+                parentId: religiongroup,
+                rank: r.i,
+                name: r.name,
+                slug: rSlug,
+                content: md.render(pageContent.replace(/\/images\//g,'./images/'))
+            })
         }
         if (win?.webContents)
             win.webContents.executeJavaScript(`
@@ -884,6 +1065,10 @@ module.exports = (mapfile,mapsvg,win=null) => {
         module.addFile('Nations/Group.yaml','slug: nations\norder: 1')
         module.addFile('Cultures/Group.yaml','slug: cultures\norder: 2')
         module.addFile('Religions/Group.yaml','slug: religions\norder: 3')
+        module.addFile('module.json',JSON.stringify(modjson))
+        module.addFile('maps.json',JSON.stringify(maps))
+        module.addFile('groups.json',JSON.stringify(groups))
+        module.addFile('pages.json',JSON.stringify(pages))
         console.log("Adding global.css from the module-packer")
         const https = require('https')
         await new Promise((resolve,reject)=>{
@@ -938,6 +1123,8 @@ module.exports = (mapfile,mapsvg,win=null) => {
         mapModule.addFile('module.xml',toXML(mod))
         mapModule.addFile(`${continent}_map.webp`,mapimage)
         module.addFile('map.zip',mapModule.toBuffer())
+        module.addLocalFile(mapfile,path.basename(mapfile))
+        module.addLocalFile(mapsvg,path.basename(mapsvg))
         console.log("Saving module")
         let destination = `${continent}.module`
         if (win)
@@ -977,5 +1164,6 @@ module.exports = (mapfile,mapsvg,win=null) => {
             win.webContents.executeJavaScript(`
                 document.querySelector('#progressBar').style.display = 'none';
                 `)
+        if (!win) process.exit()
     })
 }
